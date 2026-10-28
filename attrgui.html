@@ -1,0 +1,1017 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AttrDump</title>
+<style>
+:root {
+  color-scheme: dark;
+  --bg: #0d0f13; --panel: #12151b; --panel-2: #171b22; --raised: #1d222b; --hover: #1a1f28;
+  --line: #222834; --line-2: #2d3443;
+  --text: #e8eaf0; --dim: #a1a8ba; --faint: #6b7389;
+  --accent: #7390ff; --accent-2: #a67bff; --accent-soft: rgba(115, 144, 255, .14);
+  --good: #3fdc9b; --warn: #ffb757; --bad: #ff6b7a;
+  --radius: 10px;
+  --sans: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --mono: "Cascadia Mono", "Cascadia Code", Consolas, monospace;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+html, body { overflow: hidden; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 13px/1.45 var(--sans); user-select: none; }
+/* The window is exactly the screen: nothing in it may make the page itself scrollable (focusing a control that sits
+   below the fold used to slide the whole page up under the title bar). */
+#app { position: fixed; inset: 0; display: grid; grid-template-rows: 52px minmax(0, 1fr) 46px; overflow: hidden; overflow: clip; }
+button, input, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: #272d3a; border-radius: 6px; border: 2px solid var(--bg); }
+::-webkit-scrollbar-thumb:hover { background: #343c4e; }
+::selection { background: rgba(115, 144, 255, .35); }
+svg { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.mono { font-family: var(--mono); }
+
+/* ------------------------------------------------------------------ top bar */
+header { display: flex; align-items: center; gap: 14px; padding: 0 16px; background: var(--panel); border-bottom: 1px solid var(--line); }
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 650; letter-spacing: .2px; font-size: 14px; }
+.logo { width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center; color: #fff;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2)); box-shadow: 0 4px 14px rgba(115, 144, 255, .35); }
+.logo svg { width: 15px; height: 15px; stroke-width: 2.2; }
+.pill { display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 12px; border-radius: 999px; background: var(--panel-2);
+  border: 1px solid var(--line); color: var(--dim); white-space: nowrap; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--faint); flex: none; }
+.dot.on { background: var(--good); box-shadow: 0 0 0 3px rgba(63, 220, 155, .18); }
+.dot.busy { background: var(--warn); animation: pulse 1s ease-in-out infinite; }
+.dot.off { background: var(--bad); }
+@keyframes pulse { 50% { opacity: .35; } }
+.pill select { background: transparent; border: 0; color: var(--text); padding: 0; outline-offset: 4px; cursor: pointer; }
+.pill select option { background: var(--panel-2); }
+.spacer { flex: 1; }
+.btn { display: inline-flex; align-items: center; gap: 7px; height: 30px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--line-2);
+  background: var(--raised); color: var(--text); transition: background .12s, border-color .12s; white-space: nowrap; }
+.btn:hover:not(:disabled) { background: #252b37; border-color: #3a4357; }
+.btn:disabled { opacity: .45; cursor: default; }
+.btn.primary { background: linear-gradient(135deg, #6a89ff, #9a78ff); border-color: transparent; color: #fff; font-weight: 600; }
+.btn.primary:hover:not(:disabled) { filter: brightness(1.1); background: linear-gradient(135deg, #6a89ff, #9a78ff); }
+.btn.ghost { background: transparent; border-color: transparent; color: var(--dim); }
+.btn.ghost:hover:not(:disabled) { background: var(--hover); color: var(--text); border-color: transparent; }
+.btn.icon { width: 30px; padding: 0; justify-content: center; }
+.switch { display: inline-flex; align-items: center; gap: 8px; color: var(--dim); cursor: pointer; }
+.switch { position: relative; }
+.switch input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; pointer-events: none; }
+.switch i { position: relative; width: 34px; height: 20px; border-radius: 999px; background: #2a3040; transition: background .15s; flex: none; }
+.switch i::after { content: ""; position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 50%; background: #c9cfdd; transition: transform .15s, background .15s; }
+.switch input:checked + i { background: var(--accent); }
+.switch input:checked + i::after { transform: translateX(14px); background: #fff; }
+.switch input:focus-visible + i { outline: 2px solid var(--accent); outline-offset: 2px; }
+.scanbar { position: relative; min-width: 170px; }
+.menu { position: relative; }
+.menu-list { position: absolute; right: 0; top: 36px; z-index: 20; min-width: 210px; padding: 6px; border-radius: 10px; background: var(--raised);
+  border: 1px solid var(--line-2); box-shadow: 0 12px 32px rgba(0, 0, 0, .5); }
+.menu-list button { width: 100%; display: flex; gap: 10px; align-items: center; padding: 8px 10px; border: 0; background: none; border-radius: 6px; text-align: left; }
+.menu-list button:hover { background: var(--hover); }
+
+/* ------------------------------------------------------------------ layout */
+main { display: grid; grid-template-columns: var(--side, 360px) 6px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); min-height: 0; overflow: hidden; }
+aside { display: flex; flex-direction: column; min-height: 0; min-width: 0; overflow: hidden; background: var(--panel); }
+.split { cursor: col-resize; background: transparent; border-left: 1px solid var(--line); transition: background .12s; }
+.split:hover, .split.drag { background: var(--accent-soft); border-left-color: var(--accent); }
+.tabs { display: flex; gap: 4px; padding: 10px 12px 0; }
+.tab { flex: 1; height: 32px; border: 0; border-radius: 8px 8px 0 0; background: transparent; color: var(--faint); font-weight: 600;
+  border-bottom: 2px solid transparent; display: flex; align-items: center; justify-content: center; gap: 8px; }
+.tab:hover { color: var(--dim); }
+.tab[aria-selected="true"] { color: var(--text); border-bottom-color: var(--accent); }
+.tab .count { font-weight: 500; color: var(--faint); font-size: 11px; }
+.tabbody { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; border-top: 1px solid var(--line); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 12px 6px; }
+.chip { height: 26px; padding: 0 10px; border-radius: 999px; background: var(--panel-2); border: 1px solid var(--line); color: var(--dim);
+  display: inline-flex; align-items: center; gap: 6px; font-size: 12px; }
+.chip:hover:not(:disabled) { color: var(--text); border-color: #3a4357; background: var(--raised); }
+.chip:disabled { opacity: .4; cursor: default; }
+.chip svg { width: 13px; height: 13px; }
+.tree { flex: 1; overflow: auto; padding: 4px 6px 12px; }
+.row { display: flex; align-items: center; gap: 4px; height: 28px; border-radius: 6px; padding-right: 8px; cursor: default; white-space: nowrap; }
+.row:hover { background: var(--hover); }
+.row.sel { background: var(--accent-soft); box-shadow: inset 2px 0 0 var(--accent); }
+.chev { width: 18px; height: 18px; border: 0; background: none; color: var(--faint); display: grid; place-items: center; padding: 0; border-radius: 4px; flex: none; }
+.chev:hover { color: var(--text); background: rgba(255, 255, 255, .06); }
+.chev svg { width: 12px; height: 12px; transition: transform .12s; stroke-width: 2.4; }
+.chev.open svg { transform: rotate(90deg); }
+.chev.none { visibility: hidden; }
+.nm { overflow: hidden; text-overflow: ellipsis; flex: 1; min-width: 0; }
+.badge { font-size: 11px; font-weight: 650; padding: 0 7px; line-height: 17px; border-radius: 999px; background: var(--accent-soft); color: #aebdff; flex: none; }
+.trail { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); opacity: .6; flex: none; margin-right: 2px; }
+.kids { display: none; }
+.kids.open { display: block; }
+.note { padding: 8px 14px; color: var(--faint); font-size: 12px; }
+
+.searchbox { padding: 10px 12px 8px; display: grid; gap: 8px; }
+.field { position: relative; }
+.field svg { position: absolute; left: 10px; top: 8px; color: var(--faint); width: 15px; height: 15px; }
+.field input { width: 100%; height: 31px; padding: 0 10px 0 33px; border-radius: 8px; border: 1px solid var(--line-2); background: var(--bg); outline: none; user-select: text; }
+.field input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.field input::placeholder { color: var(--faint); }
+.seg { display: flex; gap: 6px; }
+.seg .group { display: flex; padding: 2px; border-radius: 8px; background: var(--bg); border: 1px solid var(--line); }
+.seg button { height: 24px; padding: 0 10px; border: 0; border-radius: 6px; background: none; color: var(--faint); font-size: 12px; }
+.seg button[aria-pressed="true"] { background: var(--raised); color: var(--text); }
+.seg select { height: 30px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); padding: 0 8px; color: var(--dim); }
+.results { flex: 1; overflow: auto; padding: 2px 6px 10px; }
+.hit { display: block; width: 100%; text-align: left; border: 0; background: none; padding: 7px 10px; border-radius: 8px; }
+.hit:hover { background: var(--hover); }
+.hit .top { display: flex; align-items: center; gap: 8px; }
+.hit b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hit .path { color: var(--faint); font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; }
+.hit .val { margin-left: auto; color: var(--dim); font-family: var(--mono); font-size: 11.5px; max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ------------------------------------------------------------------ content */
+.content { display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; background: var(--bg); }
+.head { padding: 18px 24px 14px; border-bottom: 1px solid var(--line); display: grid; gap: 8px; }
+.head h1 { margin: 0; font-size: 20px; font-weight: 650; display: flex; align-items: center; gap: 10px; min-width: 0; }
+.head h1 span.t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.crumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; color: var(--faint); font-size: 12px; }
+.crumbs button { border: 0; background: none; color: var(--dim); padding: 1px 5px; border-radius: 4px; }
+.crumbs button:hover { background: var(--hover); color: var(--text); }
+.crumbs svg { width: 11px; height: 11px; opacity: .6; }
+.meta { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.tag { display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 9px; border-radius: 6px; background: var(--panel-2); border: 1px solid var(--line); color: var(--dim); font-size: 11.5px; }
+button.tag:hover { color: var(--text); border-color: #3a4357; }
+.tag svg { width: 12px; height: 12px; }
+.tools { display: flex; gap: 10px; align-items: center; padding: 12px 24px 0; }
+.tools .field { flex: 1; max-width: 420px; }
+.list { flex: 1; overflow: auto; padding: 12px 24px 24px; }
+.card { border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); overflow: hidden; }
+.attr { display: grid; grid-template-columns: minmax(150px, 1fr) minmax(240px, 1.5fr) 100px; gap: 18px; align-items: center; padding: 11px 16px; border-bottom: 1px solid var(--line); transition: background .6s; }
+.attr:last-child { border-bottom: 0; }
+.attr:hover { background: rgba(255, 255, 255, .015); }
+.attr.flash { background: rgba(115, 144, 255, .16); transition: none; }
+.attr.held { box-shadow: inset 3px 0 0 var(--warn); background: rgba(255, 183, 87, .04); }
+.attr.focus { box-shadow: inset 3px 0 0 var(--accent); background: var(--accent-soft); }
+.aname { min-width: 0; display: grid; gap: 3px; }
+.aname b { font-weight: 600; font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; user-select: text; }
+.kind { justify-self: start; font-size: 10.5px; font-weight: 650; letter-spacing: .4px; text-transform: uppercase; padding: 0 7px; line-height: 17px; border-radius: 5px; }
+.k-bool { background: rgba(166, 123, 255, .16); color: #c7adff; }
+.k-num { background: rgba(115, 144, 255, .16); color: #a9bbff; }
+.k-str { background: rgba(63, 220, 155, .13); color: #7be8b9; }
+.k-vec { background: rgba(255, 183, 87, .14); color: #ffcf8f; }
+.k-col { background: rgba(255, 107, 160, .15); color: #ff9cc0; }
+.k-oth { background: rgba(160, 168, 186, .13); color: var(--dim); }
+.editor { display: flex; align-items: center; gap: 8px; min-width: 0; flex-wrap: wrap; }
+.num, .axis input { height: 30px; min-width: 0; width: 100%; max-width: 190px; padding: 0 10px; border-radius: 7px; border: 1px solid var(--line-2); background: var(--bg);
+  font-family: var(--mono); font-size: 12.5px; outline: none; user-select: text; }
+.num:hover, .axis input:hover { border-color: #3d475b; }
+.num:focus, .axis input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.num.bad, .axis input.bad { border-color: var(--bad); box-shadow: 0 0 0 3px rgba(255, 107, 122, .15); }
+.axis { display: grid; gap: 3px; width: 82px; }
+.axis span { font-size: 10px; color: var(--faint); font-weight: 650; letter-spacing: .5px; text-transform: uppercase; }
+.axis input { max-width: none; padding: 0 8px; }
+.swatch { width: 30px; height: 30px; padding: 0; border: 1px solid var(--line-2); border-radius: 7px; background: none; overflow: hidden; cursor: pointer; align-self: end; }
+.swatch::-webkit-color-swatch-wrapper { padding: 0; }
+.swatch::-webkit-color-swatch { border: 0; }
+.bool { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; }
+.bool { position: relative; }
+.bool input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; pointer-events: none; }
+.bool i { position: relative; width: 42px; height: 24px; border-radius: 999px; background: #2a3040; transition: background .15s; flex: none; }
+.bool i::after { content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #c9cfdd; transition: transform .15s, background .15s; }
+.bool input:checked + i { background: linear-gradient(135deg, #6a89ff, #9a78ff); }
+.bool input:checked + i::after { transform: translateX(18px); background: #fff; }
+.bool input:focus-visible + i { outline: 2px solid var(--accent); outline-offset: 2px; }
+.bool em { font-style: normal; font-family: var(--mono); font-size: 12.5px; color: var(--dim); }
+.ro { display: flex; align-items: center; gap: 8px; min-width: 0; color: var(--dim); font-family: var(--mono); font-size: 12.5px; }
+.ro span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; user-select: text; }
+.ro svg { width: 13px; height: 13px; color: var(--faint); }
+.acts { display: flex; gap: 4px; justify-content: flex-end; }
+.acts .btn.icon { width: 28px; height: 28px; }
+.acts .btn.held { color: var(--warn); background: rgba(255, 183, 87, .12); border-color: rgba(255, 183, 87, .4); }
+.empty { margin: auto; text-align: center; max-width: 380px; padding: 40px 20px; color: var(--dim); display: grid; gap: 12px; justify-items: center; }
+.empty .art { width: 64px; height: 64px; border-radius: 18px; display: grid; place-items: center; background: var(--panel-2); border: 1px solid var(--line); color: var(--faint); }
+.empty .art svg { width: 28px; height: 28px; stroke-width: 1.5; }
+.empty h2 { margin: 4px 0 0; font-size: 16px; color: var(--text); font-weight: 650; }
+.empty p { margin: 0; line-height: 1.55; }
+.spin { width: 26px; height: 26px; border: 3px solid var(--line-2); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.gone { margin: 12px 24px 0; padding: 10px 14px; border-radius: 8px; background: rgba(255, 183, 87, .1); border: 1px solid rgba(255, 183, 87, .3); color: #ffd9a1; }
+
+/* ------------------------------------------------------------------ holds */
+footer { display: flex; align-items: center; gap: 12px; padding: 0 16px; background: var(--panel); border-top: 1px solid var(--line); min-width: 0; }
+footer .lbl { display: flex; align-items: center; gap: 8px; color: var(--dim); font-weight: 600; white-space: nowrap; }
+footer .lbl svg { color: var(--warn); }
+.holds { display: flex; gap: 8px; overflow-x: auto; flex: 1; min-width: 0; padding: 4px 0; scrollbar-width: none; }
+.hold { display: inline-flex; align-items: center; gap: 8px; height: 28px; padding: 0 4px 0 11px; border-radius: 999px; background: rgba(255, 183, 87, .1); border: 1px solid rgba(255, 183, 87, .3); white-space: nowrap; flex: none; }
+.hold:hover { border-color: rgba(255, 183, 87, .6); }
+.hold b { font-weight: 600; }
+.hold .v { font-family: var(--mono); color: #ffd9a1; font-size: 12px; max-width: 160px; overflow: hidden; text-overflow: ellipsis; }
+.hold .w { color: var(--faint); font-size: 11.5px; max-width: 150px; overflow: hidden; text-overflow: ellipsis; }
+.hold .w.warn { color: var(--warn); }
+.hold button { width: 22px; height: 22px; border: 0; border-radius: 50%; background: none; color: var(--dim); display: grid; place-items: center; padding: 0; }
+.hold button:hover { background: rgba(255, 255, 255, .1); color: var(--text); }
+.hold button svg { width: 12px; height: 12px; }
+.hint { color: var(--faint); }
+
+.toasts { position: fixed; right: 18px; bottom: 60px; display: grid; gap: 8px; z-index: 50; pointer-events: none; }
+.toast { pointer-events: auto; max-width: 420px; padding: 10px 14px; border-radius: 10px; background: var(--raised); border: 1px solid var(--line-2); box-shadow: 0 10px 30px rgba(0, 0, 0, .5);
+  display: flex; gap: 10px; align-items: flex-start; animation: rise .18s ease-out; }
+.toast.bad { border-color: rgba(255, 107, 122, .5); }
+.toast.bad svg { color: var(--bad); }
+.toast.good svg { color: var(--good); }
+.toast svg { margin-top: 2px; }
+@keyframes rise { from { transform: translateY(8px); opacity: 0; } }
+.progress { position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; overflow: hidden; border-radius: 2px; }
+.progress::after { content: ""; position: absolute; inset: 0; width: 40%; background: linear-gradient(90deg, transparent, var(--accent), transparent); animation: slide 1.2s ease-in-out infinite; }
+@keyframes slide { from { transform: translateX(-100%); } to { transform: translateX(260%); } }
+[hidden] { display: none !important; }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></symbol>
+    <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 17v5M9 3h6l-1 6 3 3v2H7v-2l3-3z"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 012-2h9"/></symbol>
+    <symbol id="i-undo" viewBox="0 0 24 24"><path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 010 12h-3"/></symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 11a8 8 0 10-2.3 5.7"/><path d="M20 4v7h-7"/></symbol>
+    <symbol id="i-scan" viewBox="0 0 24 24"><path d="M4 8V6a2 2 0 012-2h2M16 4h2a2 2 0 012 2v2M20 16v2a2 2 0 01-2 2h-2M8 20H6a2 2 0 01-2-2v-2"/><path d="M4 12h16"/></symbol>
+    <symbol id="i-save" viewBox="0 0 24 24"><path d="M12 4v11M7 11l5 5 5-5M5 20h14"/></symbol>
+    <symbol id="i-dots" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/></symbol>
+    <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0116 0"/></symbol>
+    <symbol id="i-bag" viewBox="0 0 24 24"><path d="M6 8h12l1 12H5z"/><path d="M9 8a3 3 0 016 0"/></symbol>
+    <symbol id="i-cube" viewBox="0 0 24 24"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/></symbol>
+    <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2 20a7 7 0 0114 0M16 4.5a3.5 3.5 0 010 7M18 14.5A7 7 0 0122 20"/></symbol>
+    <symbol id="i-plug" viewBox="0 0 24 24"><path d="M9 3v5M15 3v5M6 8h12v3a6 6 0 01-12 0zM12 17v4"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v6M12 16.5v.5"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l3 3 5-6"/></symbol>
+    <symbol id="i-list" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></symbol>
+    <symbol id="i-tree" viewBox="0 0 24 24"><path d="M5 4v14a2 2 0 002 2h2M5 9h4M5 18h4M12 7h8v4h-8zM12 16h8v4h-8z"/></symbol>
+  </defs>
+</svg>
+
+<div id="app">
+<header>
+  <div class="brand"><div class="logo"><svg><use href="#i-list"/></svg></div>AttrDump</div>
+  <div class="pill" id="conn"><span class="dot" id="dot"></span><span id="connText">Not connected</span>
+    <select id="pidSel" hidden aria-label="Roblox process"></select></div>
+  <div class="spacer"></div>
+  <label class="switch" title="Re-read the open instance twice a second"><input type="checkbox" id="live" checked><i></i>Live</label>
+  <button class="btn" id="scanBtn" disabled><svg><use href="#i-scan"/></svg><span id="scanTxt">Scan game</span><span class="progress" id="scanBar" hidden></span></button>
+  <button class="btn" id="exportBtn" disabled><svg><use href="#i-save"/></svg>Export JSON</button>
+  <button class="btn primary" id="connBtn"><svg><use href="#i-plug"/></svg><span id="connBtnTxt">Connect</span></button>
+  <div class="menu">
+    <button class="btn icon ghost" id="menuBtn" aria-label="More" aria-haspopup="true"><svg><use href="#i-dots"/></svg></button>
+    <div class="menu-list" id="menuList" hidden>
+      <button id="miRediscover"><svg><use href="#i-refresh"/></svg>Rediscover layout</button>
+      <button id="miRelease"><svg><use href="#i-x"/></svg>Release all held values</button>
+      <button id="miDisconnect"><svg><use href="#i-plug"/></svg>Disconnect</button>
+    </div>
+  </div>
+</header>
+
+<main id="main">
+  <aside>
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" id="tabExplorer" aria-selected="true"><svg><use href="#i-tree"/></svg>Explorer</button>
+      <button class="tab" role="tab" id="tabSearch" aria-selected="false"><svg><use href="#i-search"/></svg>Search <span class="count" id="searchCount"></span></button>
+    </div>
+    <div class="tabbody" id="paneExplorer">
+      <div class="chips">
+        <button class="chip" data-jump="character" disabled><svg><use href="#i-user"/></svg>Character</button>
+        <button class="chip" data-jump="backpack" disabled><svg><use href="#i-bag"/></svg>Backpack</button>
+        <button class="chip" data-jump="Workspace" disabled><svg><use href="#i-cube"/></svg>Workspace</button>
+        <button class="chip" data-jump="Players" disabled><svg><use href="#i-users"/></svg>Players</button>
+        <button class="chip" id="refreshTree" disabled title="Reload the tree"><svg><use href="#i-refresh"/></svg></button>
+      </div>
+      <div class="tree" id="tree" role="tree"></div>
+    </div>
+    <div class="tabbody" id="paneSearch" hidden>
+      <div class="searchbox">
+        <div class="field"><svg><use href="#i-search"/></svg><input id="q" placeholder="Find an attribute, value or path" autocomplete="off" spellcheck="false"></div>
+        <div class="seg">
+          <div class="group" id="fieldSeg">
+            <button data-f="any" aria-pressed="true">All</button><button data-f="name" aria-pressed="false">Name</button>
+            <button data-f="value" aria-pressed="false">Value</button><button data-f="path" aria-pressed="false">Path</button>
+          </div>
+          <select id="kindSel" aria-label="Type"><option value="">Any type</option></select>
+        </div>
+      </div>
+      <div class="results" id="results"></div>
+    </div>
+  </aside>
+  <div class="split" id="split" role="separator" aria-orientation="vertical"></div>
+  <section class="content" id="content"></section>
+</main>
+
+<footer>
+  <div class="lbl"><svg><use href="#i-pin"/></svg><span id="holdLbl">Held values</span></div>
+  <div class="holds" id="holds"><span class="hint">Pin an attribute to keep re-applying its value every 50 ms (the game can't undo it).</span></div>
+  <button class="btn ghost" id="releaseAll" hidden>Release all</button>
+</footer>
+</div>
+<div class="toasts" id="toasts" aria-live="polite"></div>
+
+<script>
+"use strict";
+const $ = (selector, root = document) => root.querySelector(selector);
+const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
+const icon = (name) => `<svg aria-hidden="true"><use href="#i-${name}"/></svg>`;
+const esc = (text) => String(text).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const make = (html) => { const t = document.createElement("template"); t.innerHTML = html.trim(); return t.content.firstElementChild; };
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+const EDIT_LABELS = {
+  Vector2: ["X", "Y"], Vector3: ["X", "Y", "Z"], Color3: ["R", "G", "B"], NumberRange: ["Min", "Max"],
+  Rect2D: ["X min", "Y min", "X max", "Y max"], UDim: ["Scale", "Offset"], UDim2: ["X scale", "X offset", "Y scale", "Y offset"],
+};
+const INT_AXES = { UDim: [1], UDim2: [1, 3], BrickColor: [0] };
+const KIND_CLASS = { bool: "k-bool", double: "k-num", float: "k-num", BrickColor: "k-num", string: "k-str", Vector2: "k-vec", Vector3: "k-vec",
+  NumberRange: "k-vec", Rect2D: "k-vec", UDim: "k-vec", UDim2: "k-vec", Color3: "k-col" };
+
+const S = {
+  status: null, connecting: false, autoTried: new Map(), manual: false, builtFor: null, forceRows: false, loading: false,
+  nodes: new Map(), rootNode: null, selected: null, inspect: null, filter: "", focusName: null,
+  originals: new Map(), live: true, tab: "explorer", busy: false, holds: [],
+  search: { text: "", field: "any", kind: "", seq: 0 }, kinds: new Set(), lastScan: "",
+};
+
+const api = () => window.pywebview && window.pywebview.api;
+async function rpc(name, ...args) {
+  try {
+    const reply = await api()[name](...args);
+    if (reply && reply.error) { return { error: reply.error }; }
+    return reply || {};
+  } catch (error) {
+    return { error: String(error && error.message || error) };
+  }
+}
+
+function toast(text, kind = "good") {
+  const node = make(`<div class="toast ${kind}">${icon(kind === "bad" ? "alert" : "check")}<span>${esc(text)}</span></div>`);
+  $("#toasts").append(node);
+  setTimeout(() => node.remove(), kind === "bad" ? 6500 : 2600);
+}
+
+async function copy(text) {
+  try { await navigator.clipboard.writeText(text); }
+  catch (error) {
+    const area = document.createElement("textarea");
+    area.value = text; document.body.append(area); area.select(); document.execCommand("copy"); area.remove();
+  }
+  toast("Copied");
+}
+
+/* ------------------------------------------------------------------------------ connection */
+
+function setConnectionUI() {
+  const s = S.status || {};
+  const dot = $("#dot"), text = $("#connText"), select = $("#pidSel");
+  dot.className = "dot " + (s.connected ? "on" : s.connecting || S.connecting ? "busy" : "off");
+  if (s.connected) text.textContent = `Connected · ${s.build || "Roblox"} · layout ${s.how}`;
+  else if (s.connecting || S.connecting) text.textContent = "Finding the game in memory…";
+  else text.textContent = s.message || (s.pids && s.pids.length ? "Roblox found" : "Roblox isn't running");
+  const pids = s.pids || [];
+  select.hidden = pids.length < 2;
+  if (pids.length >= 2) {
+    select.innerHTML = pids.map((pid) => `<option value="${pid}">pid ${pid}</option>`).join("");
+    select.value = String(s.connected ? s.pid : pids[0]);
+  }
+  $("#connBtnTxt").textContent = s.connected ? "Reconnect" : "Connect";
+  $("#connBtn").disabled = S.connecting || !pids.length && !s.connected;
+  for (const id of ["scanBtn", "refreshTree"]) { $("#" + id).disabled = !s.connected; }
+  $$("[data-jump]").forEach((b) => { b.disabled = !s.connected; });
+  $("#exportBtn").disabled = !(s.connected && s.scan && (s.scan.state === "done" || s.scan.state === "stopped") && s.scan.attributes > 0);
+  const scan = s.scan || { state: "idle" };
+  const running = scan.state === "running";
+  $("#scanBar").hidden = !running;
+  $("#scanTxt").textContent = running ? `Scanning… ${scan.instances.toLocaleString()}` : scan.state === "done" ? "Rescan" : "Scan game";
+  $("#scanBtn").title = running ? "Click to stop" : "";
+  $("#searchCount").textContent = scan.attributes && scan.state !== "running" ? scan.attributes.toLocaleString() : "";
+}
+
+async function pollStatus() {
+  const s = await rpc("status");
+  if (s.error) { return; }
+  const wasConnected = S.status && S.status.connected;
+  const previousScan = S.lastScan;
+  const before = S.status ? [S.status.connected, !!(S.status.pids || []).length].join() : "";
+  S.status = s;
+  S.holds = s.holds || [];
+  setConnectionUI();
+  renderHolds();
+  if (s.connected && !S.rootNode && !S.connecting && !S.loading) { S.loading = true; await loadRoot(); S.loading = false; }
+  if (before !== [s.connected, !!(s.pids || []).length].join() && !(wasConnected && s.connected)) { renderContent(); }
+  if (wasConnected && !s.connected) { resetWorld(); toast(s.message || "Disconnected", "bad"); }
+  if (s.scan && s.scan.state !== previousScan) {
+    if (previousScan === "running" && (s.scan.state === "done" || s.scan.state === "stopped")) {
+      toast(`Scanned ${s.scan.instances.toLocaleString()} instances · ${s.scan.attributes.toLocaleString()} attributes`);
+      refreshBranchMarks();
+      if (S.tab === "search") { runSearch(); }
+    } else if (s.scan.state === "error") { toast(s.scan.message || "Scan failed", "bad"); }
+    S.lastScan = s.scan.state;
+  }
+  if (!s.connected && !S.connecting && !S.manual && s.pids && s.pids.length) {
+    const pid = s.pids[0], tried = S.autoTried.get(pid) || { at: 0, n: 0 };
+    if (tried.n < 6 && Date.now() - tried.at > 6000) {
+      S.autoTried.set(pid, { at: Date.now(), n: tried.n + 1 });
+      connect(pid);
+    }
+  }
+}
+
+async function connect(pid = 0, rediscover = false) {
+  if (S.connecting) { return; }
+  S.connecting = true; S.manual = false;
+  resetWorld();
+  renderContent();
+  setConnectionUI();
+  const reply = await rpc("connect", pid || Number($("#pidSel").value) || 0, rediscover);
+  S.connecting = false;
+  if (reply.error) { toast(reply.error, "bad"); }
+  await pollStatus();
+  if (S.status && S.status.connected) { await loadRoot(); toast(`Connected to pid ${S.status.pid}`); }
+  renderContent();
+}
+
+function resetWorld() {
+  S.nodes.clear(); S.rootNode = null; S.selected = null; S.inspect = null; S.filter = "";
+  $("#tree").innerHTML = "";
+  $("#results").innerHTML = ""; $("#searchCount").textContent = "";
+  S.search.seq++;
+}
+
+/* ------------------------------------------------------------------------------------ tree */
+
+class Node {
+  constructor(data, parent) {
+    this.address = data.a; this.name = data.n; this.parent = parent; this.paddr = parent ? parent.address : 0;
+    this.chain = parent ? [...parent.chain, data.n] : [];
+    this.hasKids = data.k; this.count = data.c; this.branch = data.b;
+    this.children = []; this.loaded = false; this.open = false; this.depth = parent ? parent.depth + 1 : 0;
+    this.el = make(`<div class="node" role="treeitem"><div class="row"><button class="chev" tabindex="-1" aria-label="Expand">${icon("chev")}</button><span class="nm"></span></div><div class="kids" role="group"></div></div>`);
+    this.row = $(".row", this.el); this.kids = $(".kids", this.el); this.chev = $(".chev", this.el);
+    this.row.style.paddingLeft = (this.depth * 14 + 2) + "px";
+    $(".nm", this.row).textContent = this.name;
+    this.chev.addEventListener("click", (e) => { e.stopPropagation(); toggle(this); });
+    this.row.addEventListener("click", () => select(this));
+    this.row.addEventListener("dblclick", () => toggle(this));
+    this.update(data);
+    S.nodes.set(this.address, this);
+  }
+  update(data) {
+    this.hasKids = data.k; this.count = data.c; this.branch = data.b;
+    this.chev.classList.toggle("none", !this.hasKids);
+    $$(".badge, .trail", this.row).forEach((n) => n.remove());
+    if (this.count) { this.row.append(make(`<span class="badge" title="${this.count} attribute${this.count > 1 ? "s" : ""}">${this.count}</span>`)); }
+    else if (this.branch) { this.row.append(make(`<span class="trail" title="Something under here has attributes"></span>`)); }
+  }
+}
+
+async function loadRoot() {
+  const reply = await rpc("root");
+  if (reply.error) { toast(reply.error, "bad"); return; }
+  const node = new Node(reply, null);
+  node.chain = []; S.rootNode = node;
+  $("#tree").append(node.el);
+  await toggle(node, true);
+  await select(node);
+}
+
+async function toggle(node, force) {
+  const open = force === undefined ? !node.open : force;
+  if (open && !node.loaded) {
+    const reply = await rpc("children", node.address);
+    if (reply.error) { toast(reply.error, "bad"); return; }
+    node.kids.innerHTML = ""; node.children = [];
+    for (const data of reply.nodes) { const child = new Node(data, node); node.children.push(child); node.kids.append(child.el); }
+    if (reply.truncated) { node.kids.append(make(`<div class="note">Showing the first ${reply.nodes.length} children</div>`)); }
+    node.loaded = true;
+  }
+  node.open = open;
+  node.kids.classList.toggle("open", open);
+  node.chev.classList.toggle("open", open);
+}
+
+async function reveal(nodes) {
+  /* nodes: [{a, n, k, c, b}] from the root down; opens each and returns the Node for the last */
+  let current = S.rootNode;
+  for (const data of nodes.slice(1)) {
+    await toggle(current, true);
+    const next = current.children.find((n) => n.address === data.a) || current.children.find((n) => n.name === data.n);
+    if (!next) { return null; }
+    next.update(data);
+    current = next;
+  }
+  return current;
+}
+
+async function jumpTo(nodes) {
+  if (!S.rootNode) { return; }
+  const target = await reveal(nodes);
+  if (!target) { toast("Couldn't find that in the tree", "bad"); return; }
+  setTab("explorer");
+  await select(target);
+  target.row.scrollIntoView({ block: "center", behavior: "smooth" });
+}
+
+async function refreshTree() {
+  if (!S.rootNode) { return; }
+  const open = [...S.nodes.values()].filter((n) => n.open && n.parent).map((n) => n.chain);
+  const chain = S.selected ? S.selected.chain : [];
+  S.nodes.clear(); S.rootNode = null; $("#tree").innerHTML = "";
+  const reply = await rpc("root");
+  if (reply.error) { return; }
+  const root = new Node(reply, null); root.chain = []; S.rootNode = root; $("#tree").append(root.el);
+  await toggle(root, true);
+  open.sort((a, b) => a.length - b.length);
+  for (const path of open) {
+    const found = await rpc("nodes", path);
+    if (!found.error) { await reveal(found.nodes); }
+  }
+  const found = await rpc("nodes", chain);
+  const node = found.error ? root : await reveal(found.nodes) || root;
+  await select(node);
+  toast("Tree reloaded");
+}
+
+async function refreshBranchMarks() {
+  const loaded = [...S.nodes.values()].filter((n) => n.loaded);
+  for (const parent of loaded) {
+    const reply = await rpc("children", parent.address);
+    if (reply.error) { continue; }
+    for (const data of reply.nodes) { const node = S.nodes.get(data.a); if (node && node.parent === parent) { node.update(data); } }
+  }
+}
+
+/* --------------------------------------------------------------------------------- inspector */
+
+async function select(node, options = {}) {
+  if (S.selected && S.selected.row) { S.selected.row.classList.remove("sel"); }
+  S.selected = node; S.inspect = null;
+  node.row.classList.add("sel");
+  if (!options.keepFocus) { S.focusName = options.focus || null; }
+  await refreshInspector(true);
+}
+
+async function refreshInspector(force = false) {
+  const node = S.selected;
+  if (force) { for (let i = 0; i < 20 && S.busy; i++) { await sleep(50); } }
+  if (!node || S.busy) { return; }
+  S.busy = true;
+  const reply = await rpc("inspect", refOf(node));
+  S.busy = false;
+  if (S.selected !== node) { return; }
+  if (reply.error) { if (force) { toast(reply.error, "bad"); } return; }
+  if (reply.gone) { const was = S.inspect && S.inspect.gone; S.inspect = { gone: true }; if (!was) { renderContent(); } return; }
+  if (reply.address && reply.address !== node.address) {
+    S.nodes.delete(node.address); node.address = reply.address; S.nodes.set(node.address, node);
+  }
+  if (reply.parent) { node.paddr = reply.parent; }
+  const before = S.inspect;
+  S.inspect = reply;
+  if (node.count !== reply.attributes.length) { node.update({ k: reply.children > 0, c: reply.attributes.length, b: node.branch }); }
+  renderContent(S.builtFor !== node || !before || !!before.gone, before);
+}
+
+function refOf(node) { return { c: node.chain, a: node.address, p: node.paddr }; }
+
+function holdFor(name) {
+  const key = S.selected ? S.selected.chain.join("/") : null;
+  return S.holds.find((h) => h.chain.join("/") === key && h.name === name);
+}
+
+function kindClass(kind) { return KIND_CLASS[kind] || "k-oth"; }
+function kindLabel(kind) { return kind === "double" || kind === "float" ? "number · " + kind : kind; }
+function plain(value) {
+  if (typeof value === "string") { return value.length > 500 ? value.slice(0, 500) + "…" : value; }
+  return JSON.stringify(value);
+}
+function fmt(number) { return String(number); }
+function colorHex(rgb) { return "#" + rgb.map((v) => Math.max(0, Math.min(255, Math.round(v * 255))).toString(16).padStart(2, "0")).join(""); }
+function hexColor(hex) { return [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255); }
+
+function parseNumber(input, integer) {
+  const text = input.value.trim();
+  const ok = text !== "" && Number.isFinite(Number(text)) && (!integer || Number.isInteger(Number(text)));
+  input.classList.toggle("bad", !ok);
+  return ok ? Number(text) : null;
+}
+
+function editorFor(attr) {
+  const wrap = make(`<div class="editor"></div>`);
+  const submit = (value) => commit(attr, value);
+  if (!attr.decoded) { wrap.innerHTML = `<div class="ro">${icon("lock")}<span>couldn't decode</span></div>`; return wrap; }
+  if (!attr.editable) {
+    const text = plain(attr.value);
+    wrap.innerHTML = `<div class="ro" title="Only booleans, numbers, vectors, colours and UDims can be changed from outside the game">${icon("lock")}<span>${esc(text)}</span></div>`;
+    return wrap;
+  }
+  if (attr.kind === "bool") {
+    const label = make(`<label class="bool"><input type="checkbox"><i></i><em></em></label>`);
+    const box = $("input", label);
+    box.checked = !!attr.value; $("em", label).textContent = String(!!attr.value);
+    box.addEventListener("change", () => { $("em", label).textContent = String(box.checked); submit(box.checked); });
+    wrap.append(label);
+    return wrap;
+  }
+  const labels = EDIT_LABELS[attr.kind];
+  const values = Array.isArray(attr.value) ? attr.value : [attr.value];
+  const ints = INT_AXES[attr.kind] || [];
+  const inputs = values.map((v, i) => {
+    const input = make(`<input class="${labels ? "" : "num"}" inputmode="decimal" spellcheck="false" autocomplete="off">`);
+    input.value = fmt(v); input.dataset.index = i; input.dataset.shown = input.value;
+    return input;
+  });
+  const read = () => {
+    const parsed = inputs.map((input, i) => parseNumber(input, ints.includes(i)));
+    return parsed.includes(null) ? null : (Array.isArray(attr.value) ? parsed : parsed[0]);
+  };
+  const apply = () => { const value = read(); if (value !== null) { for (const i of inputs) { i.dataset.shown = i.value; } submit(value); } };
+  let timer = 0;
+  for (const input of inputs) {
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); apply(); input.blur(); }
+      else if (e.key === "Escape") { input.value = input.dataset.shown; input.classList.remove("bad"); input.blur(); }
+      else if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+        const step = (e.shiftKey ? 10 : e.altKey ? 0.1 : 1) * (e.key === "ArrowUp" ? 1 : -1) * (attr.kind === "Color3" ? 0.05 : 1);
+        const now = Number(input.value);
+        if (Number.isFinite(now)) {
+          e.preventDefault();
+          input.value = fmt(Math.round((now + step) * 1e6) / 1e6);
+          clearTimeout(timer); timer = setTimeout(apply, 140);
+        }
+      }
+    });
+    input.addEventListener("input", () => parseNumber(input, ints.includes(Number(input.dataset.index))));
+    input.addEventListener("blur", () => { if (input.value !== input.dataset.shown) { apply(); } });
+  }
+  if (labels) {
+    inputs.forEach((input, i) => { const axis = make(`<label class="axis"><span>${labels[i]}</span></label>`); axis.append(input); wrap.append(axis); });
+  } else { wrap.append(inputs[0]); }
+  if (attr.kind === "Color3") {
+    const swatch = make(`<input type="color" class="swatch" aria-label="Pick a colour">`);
+    swatch.value = colorHex(values);
+    swatch.addEventListener("change", () => {
+      const rgb = hexColor(swatch.value).map((v) => Math.round(v * 1000) / 1000);
+      inputs.forEach((input, i) => { input.value = fmt(rgb[i]); input.dataset.shown = input.value; });
+      submit(rgb);
+    });
+    wrap.append(swatch);
+  }
+  return wrap;
+}
+
+async function commit(attr, value) {
+  const node = S.selected;
+  if (!node) { return; }
+  const key = node.chain.join("/") + "\u0001" + attr.name;
+  if (!S.originals.has(key)) { S.originals.set(key, JSON.parse(JSON.stringify(attr.value))); }
+  const held = holdFor(attr.name);
+  const reply = held ? await rpc("hold", refOf(node), attr.name, value) : await rpc("set_value", refOf(node), attr.name, value);
+  if (reply.error) { toast(reply.error, "bad"); S.forceRows = true; }
+  else { toast(`${attr.name} → ${plain(value)}${held ? " (held)" : ""}`); }
+  await pollStatus();
+  await refreshInspector(true);
+  S.forceRows = false;
+}
+
+async function toggleHold(attr) {
+  const node = S.selected;
+  const held = holdFor(attr.name);
+  if (held) { await rpc("release", held.key); toast(`Released ${attr.name}`); }
+  else {
+    const reply = await rpc("hold", refOf(node), attr.name, attr.value);
+    if (reply.error) { toast(reply.error, "bad"); } else { toast(`Holding ${attr.name} at ${plain(attr.value)}`); }
+  }
+  await pollStatus();
+  await refreshInspector(true);
+}
+
+async function revert(attr) {
+  const node = S.selected;
+  const key = node.chain.join("/") + "\u0001" + attr.name;
+  const original = S.originals.get(key);
+  const held = holdFor(attr.name);
+  if (held) { await rpc("release", held.key); }
+  const reply = await rpc("set_value", refOf(node), attr.name, original);
+  if (reply.error) { toast(reply.error, "bad"); return; }
+  S.originals.delete(key);
+  toast(`${attr.name} restored to ${plain(original)}`);
+  await pollStatus();
+  await refreshInspector(true);
+}
+
+function renderContent(rebuild = true, before = null) {
+  rebuild = rebuild !== false;
+  const box = $("#content");
+  const s = S.status || {};
+  if (S.connecting || !s.connected || !S.selected || !S.inspect || S.inspect.gone) { S.builtFor = null; }
+  if (S.connecting) {
+    box.innerHTML = `<div class="empty"><div class="spin"></div><h2>Finding the game…</h2><p>The first time on a new Roblox build this takes about 15 seconds while the layout is worked out. After that it's instant.</p></div>`;
+    return;
+  }
+  if (!s.connected) {
+    const none = !(s.pids && s.pids.length);
+    box.innerHTML = `<div class="empty"><div class="art">${icon("plug")}</div><h2>${none ? "Roblox isn't running" : "Ready to connect"}</h2>
+      <p>${none ? "Start Roblox and join a game. This window will connect on its own." : "Roblox is running. Connect to read its attributes."}</p>
+      ${none ? "" : `<button class="btn primary" id="emptyConnect">${icon("plug")}Connect</button>`}</div>`;
+    const button = $("#emptyConnect"); if (button) { button.onclick = () => connect(); }
+    return;
+  }
+  if (!S.selected || !S.inspect) {
+    box.innerHTML = `<div class="empty"><div class="art">${icon("tree")}</div><h2>Pick an instance</h2><p>Choose something in the Explorer, or search every attribute after scanning the game.</p></div>`;
+    return;
+  }
+  const node = S.selected;
+  if (S.inspect.gone) {
+    box.innerHTML = `<div class="head"><h1><span class="t">${esc(node.name)}</span></h1></div><div class="gone">This instance isn't in the game right now. It will come back here if it respawns.</div>`;
+    return;
+  }
+  const info = S.inspect;
+  if (rebuild || !$("#attrList")) { buildContent(node, info); S.builtFor = node; }
+  updateRows(info, before);
+}
+
+function buildContent(node, info) {
+  const box = $("#content");
+  const crumbs = [{ name: "game", chain: [] }, ...node.chain.map((name, i) => ({ name, chain: node.chain.slice(0, i + 1) }))];
+  box.innerHTML = `
+    <div class="head">
+      <h1><span class="t">${esc(node.name === "" ? "(unnamed)" : node.chain.length ? node.name : "game")}</span></h1>
+      <div class="crumbs" id="crumbs"></div>
+      <div class="meta"><span class="tag" id="tagAttrs"></span><span class="tag" id="tagKids"></span>
+        <button class="tag mono" id="tagAddr" title="Copy the address">${icon("copy")}0x${node.address.toString(16).toUpperCase()}</button></div>
+    </div>
+    <div class="tools"><div class="field"><svg><use href="#i-search"/></svg><input id="attrFilter" placeholder="Filter these attributes" autocomplete="off" spellcheck="false"></div></div>
+    <div class="list" id="attrList"></div>`;
+  const bar = $("#crumbs");
+  crumbs.forEach((crumb, i) => {
+    if (i) { bar.insertAdjacentHTML("beforeend", icon("chev")); }
+    const button = make(`<button>${esc(crumb.name)}</button>`);
+    button.onclick = async () => { const found = await rpc("nodes", crumb.chain); if (!found.error) { jumpTo(found.nodes); } };
+    bar.append(button);
+  });
+  $("#tagAddr").onclick = () => copy("0x" + node.address.toString(16).toUpperCase());
+  const filter = $("#attrFilter");
+  filter.value = S.filter;
+  filter.addEventListener("input", () => { S.filter = filter.value; applyFilter(); });
+}
+
+function applyFilter() {
+  const needle = S.filter.trim().toLowerCase();
+  let shown = 0;
+  $$("#attrList .attr").forEach((row) => {
+    const hit = !needle || row.dataset.name.toLowerCase().includes(needle);
+    row.hidden = !hit; shown += hit;
+  });
+  const empty = $("#attrEmpty");
+  if (empty) { empty.hidden = shown > 0; }
+}
+
+function updateRows(info, before) {
+  $("#tagAttrs").textContent = `${info.attributes.length} attribute${info.attributes.length === 1 ? "" : "s"}`;
+  $("#tagKids").textContent = `${info.children} ${info.children === 1 ? "child" : "children"}`;
+  const list = $("#attrList");
+  let card = $(".card", list);
+  if (!info.attributes.length) {
+    list.innerHTML = `<div class="empty"><div class="art">${icon("list")}</div><h2>No attributes</h2><p>Nothing is set on this instance. Pick another one, or search after scanning the game.</p></div>`;
+    return;
+  }
+  if (!card) {
+    list.innerHTML = "";
+    card = make(`<div class="card"></div>`);
+    card.append(make(`<div class="note" id="attrEmpty" hidden>No attribute matches that filter</div>`));
+    list.append(card);
+  }
+  /* Keep the rows that are already there (and so the scroll position, focus and half-typed values): only rows whose
+     name is new are built, only rows that disappeared are removed, and a row is replaced only when what it shows changed. */
+  const live = !!(before && !before.gone);
+  const existing = new Map($$(".attr", card).map((row) => [row.dataset.name, row]));
+  const order = [];
+  for (const attr of info.attributes) {
+    let row = existing.get(attr.name);
+    existing.delete(attr.name);
+    if (!row) { row = buildRow(attr); if (live) { flash(row); } }
+    else {
+      const same = JSON.stringify(row._attr.value) === JSON.stringify(attr.value) && row._attr.kind === attr.kind && row._attr.editable === attr.editable;
+      const held = !!holdFor(attr.name);
+      const touching = row.contains(document.activeElement) && !S.forceRows;
+      if ((!same || row.classList.contains("held") !== held) && !touching) {
+        const fresh = buildRow(attr);
+        row.replaceWith(fresh); row = fresh;
+        if (!same && live) { flash(row); }
+      } else if (touching && row.classList.contains("held") !== held) { row.classList.toggle("held", held); }
+    }
+    order.push(row);
+  }
+  existing.forEach((row) => row.remove());
+  let at = card.firstElementChild;
+  for (const row of order) {
+    if (row === at) { at = at.nextElementSibling; } else { card.insertBefore(row, at); }
+  }
+  applyFilter();
+  if (S.focusName) {
+    const row = order.find((r) => r.dataset.name === S.focusName);
+    if (row) { row.classList.add("focus"); row.scrollIntoView({ block: "center" }); setTimeout(() => row.classList.remove("focus"), 2600); }
+    S.focusName = null;
+  }
+}
+
+function flash(row) { row.classList.add("flash"); requestAnimationFrame(() => requestAnimationFrame(() => row.classList.remove("flash"))); }
+
+function buildRow(attr) {
+  const key = S.selected.chain.join("/") + "\u0001" + attr.name;
+  const held = holdFor(attr.name);
+  const row = make(`<div class="attr${held ? " held" : ""}" data-name="${esc(attr.name)}">
+    <div class="aname"><b title="${esc(attr.name)}">${esc(attr.name)}</b><span class="kind ${kindClass(attr.kind)}">${esc(kindLabel(attr.kind))}</span></div>
+    <div class="ed"></div><div class="acts"></div></div>`);
+  row._attr = attr;
+  $(".ed", row).replaceWith(editorFor(attr));
+  const acts = $(".acts", row);
+  const original = S.originals.get(key);
+  if (original !== undefined && JSON.stringify(original) !== JSON.stringify(attr.value)) {
+    const undo = make(`<button class="btn icon ghost" title="Restore the value it had before you changed it" aria-label="Revert">${icon("undo")}</button>`);
+    undo.onclick = () => revert(attr); acts.append(undo);
+  }
+  if (attr.editable) {
+    const pin = make(`<button class="btn icon ghost${held ? " held" : ""}" title="${held ? "Release this value" : "Keep this value in place"}" aria-label="Hold" aria-pressed="${!!held}">${icon("pin")}</button>`);
+    pin.onclick = () => toggleHold(attr); acts.append(pin);
+  }
+  const cp = make(`<button class="btn icon ghost" title="Copy the value" aria-label="Copy value">${icon("copy")}</button>`);
+  cp.onclick = () => copy(typeof attr.value === "string" ? attr.value : JSON.stringify(attr.value)); acts.append(cp);
+  return row;
+}
+
+/* ----------------------------------------------------------------------------------- holds */
+
+function renderHolds() {
+  const box = $("#holds");
+  const sig = JSON.stringify(S.holds.map((h) => [h.key, h.state, h.writes > 0, JSON.stringify(h.value)]));
+  if (box.dataset.sig === sig) { return; }
+  box.dataset.sig = sig;
+  $("#holdLbl").textContent = S.holds.length ? `Holding ${S.holds.length}` : "Held values";
+  $("#releaseAll").hidden = !S.holds.length;
+  if (!S.holds.length) { box.innerHTML = `<span class="hint">Pin an attribute to keep re-applying its value every 50 ms (the game can't undo it).</span>`; return; }
+  box.innerHTML = "";
+  for (const h of S.holds) {
+    const ok = h.state === "holding";
+    const chip = make(`<div class="hold"><b>${esc(h.name)}</b><span class="v">${esc(plain(h.value))}</span>
+      <span class="w ${ok ? "" : "warn"}" title="${esc(h.chain.join("/"))}">${ok ? esc(h.chain[h.chain.length - 1] || "game") : esc(h.state)}</span>
+      <button aria-label="Release">${icon("x")}</button></div>`);
+    $("button", chip).onclick = async () => { await rpc("release", h.key); await pollStatus(); await refreshInspector(true); };
+    box.append(chip);
+  }
+}
+
+/* ---------------------------------------------------------------------------------- search */
+
+function setTab(tab) {
+  S.tab = tab;
+  $("#tabExplorer").setAttribute("aria-selected", tab === "explorer");
+  $("#tabSearch").setAttribute("aria-selected", tab === "search");
+  $("#paneExplorer").hidden = tab !== "explorer";
+  $("#paneSearch").hidden = tab !== "search";
+  if (tab === "search") { runSearch(); setTimeout(() => $("#q").focus(), 0); }
+}
+
+let searchTimer = 0;
+async function runSearch() {
+  const box = $("#results");
+  const s = S.status || {};
+  if (!s.connected) { box.innerHTML = `<div class="note">Connect to Roblox first.</div>`; return; }
+  const scan = s.scan || { state: "idle" };
+  if (scan.state === "idle" || scan.state === "error") {
+    box.innerHTML = `<div class="empty"><div class="art">${icon("scan")}</div><h2>Scan the game first</h2><p>Searching needs every attribute read once. It runs in the background and you can keep editing meanwhile.</p><button class="btn primary" id="scanHere">${icon("scan")}Scan game</button></div>`;
+    $("#scanHere").onclick = startScan; return;
+  }
+  if (scan.state === "running") { box.innerHTML = `<div class="empty"><div class="spin"></div><h2>Scanning…</h2><p>${scan.instances.toLocaleString()} instances so far · ${scan.attributes.toLocaleString()} attributes</p></div>`; return; }
+  const seq = ++S.search.seq;
+  const reply = await rpc("search", S.search.text, S.search.field, S.search.kind);
+  if (seq !== S.search.seq) { return; }
+  if (reply.error) { box.innerHTML = `<div class="note">${esc(reply.error)}</div>`; return; }
+  const kinds = new Set(S.kinds);
+  reply.hits.forEach((h) => kinds.add(h.kind));
+  if (kinds.size !== S.kinds.size) {
+    S.kinds = kinds;
+    $("#kindSel").innerHTML = `<option value="">Any type</option>` + [...kinds].sort().map((k) => `<option value="${esc(k)}">${esc(k)}</option>`).join("");
+    $("#kindSel").value = S.search.kind;
+  }
+  box.innerHTML = "";
+  if (!reply.hits.length) { box.innerHTML = `<div class="note">Nothing matches.</div>`; return; }
+  box.append(make(`<div class="note">${reply.total.toLocaleString()} match${reply.total === 1 ? "" : "es"}${reply.total > reply.hits.length ? ` · showing ${reply.hits.length}` : ""}</div>`));
+  for (const hit of reply.hits) {
+    const item = make(`<button class="hit"><div class="top"><b>${esc(hit.name)}</b><span class="kind ${kindClass(hit.kind)}">${esc(hit.kind)}</span><span class="val">${esc(hit.value)}</span></div><div class="path" title="${esc(hit.path)}"><bdi>${esc(hit.path)}</bdi></div></button>`);
+    item.onclick = async () => {
+      const found = await rpc("locate", hit.a);
+      if (found.error) { toast(found.error, "bad"); return; }
+      const target = await reveal(found.nodes);
+      if (!target) { toast("That instance has moved or is gone", "bad"); return; }
+      await select(target, { focus: hit.name });
+      target.row.scrollIntoView({ block: "center" });
+    };
+    box.append(item);
+  }
+}
+
+async function startScan() {
+  const scan = S.status && S.status.scan;
+  if (scan && scan.state === "running") { await rpc("stop_scan"); toast("Stopping the scan"); return; }
+  const reply = await rpc("scan");
+  if (reply.error) { toast(reply.error, "bad"); return; }
+  await pollStatus();
+  if (S.tab === "search") { runSearch(); }
+}
+
+/* -------------------------------------------------------------------------------- wiring */
+
+function wire() {
+  $("#connBtn").onclick = () => connect(0, false);
+  $("#scanBtn").onclick = startScan;
+  $("#exportBtn").onclick = async () => {
+    const reply = await rpc("export_json");
+    if (reply.error) { toast(reply.error, "bad"); } else if (!reply.cancelled) { toast(`Saved ${reply.count.toLocaleString()} attributes`); }
+  };
+  $("#live").onchange = (e) => { S.live = e.target.checked; };
+  $("#tabExplorer").onclick = () => setTab("explorer");
+  $("#tabSearch").onclick = () => setTab("search");
+  $("#refreshTree").onclick = refreshTree;
+  $("#releaseAll").onclick = async () => { await rpc("release_all"); await pollStatus(); await refreshInspector(true); };
+  $$("[data-jump]").forEach((b) => { b.onclick = async () => {
+    const reply = await rpc("jump", b.dataset.jump);
+    if (reply.error) { toast(reply.error, "bad"); } else { jumpTo(reply.nodes); }
+  }; });
+  const menu = $("#menuList");
+  $("#menuBtn").onclick = (e) => { e.stopPropagation(); menu.hidden = !menu.hidden; };
+  document.addEventListener("click", () => { menu.hidden = true; });
+  $("#miRediscover").onclick = () => connect(0, true);
+  $("#miRelease").onclick = async () => { await rpc("release_all"); await pollStatus(); };
+  $("#miDisconnect").onclick = async () => { S.manual = true; await rpc("disconnect"); resetWorld(); await pollStatus(); renderContent(); };
+  $("#q").addEventListener("input", (e) => { S.search.text = e.target.value; clearTimeout(searchTimer); searchTimer = setTimeout(runSearch, 160); });
+  $$("#fieldSeg button").forEach((b) => { b.onclick = () => {
+    $$("#fieldSeg button").forEach((x) => x.setAttribute("aria-pressed", x === b));
+    S.search.field = b.dataset.f; runSearch();
+  }; });
+  $("#kindSel").onchange = (e) => { S.search.kind = e.target.value; runSearch(); };
+  document.addEventListener("keydown", (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "f") { e.preventDefault(); setTab("search"); }
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "r") { e.preventDefault(); }
+    if (e.key === "F5") { e.preventDefault(); }
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") { treeKey(e); }
+    if (e.key === "ArrowRight" || e.key === "ArrowLeft") { treeKey(e); }
+  });
+  document.addEventListener("contextmenu", (e) => e.preventDefault());
+  document.addEventListener("scroll", (e) => {
+    const t = e.target;
+    const shell = t === document || t === document.body || t === document.documentElement || (t.matches && t.matches("#app, main, aside, .content, .tabbody"));
+    if (!shell) { return; }
+    const root = document.scrollingElement;
+    if (t === document || t === document.documentElement || t === document.body) { if (root.scrollTop || root.scrollLeft) { root.scrollTo(0, 0); } }
+    else if (t.scrollTop || t.scrollLeft) { t.scrollTo(0, 0); }
+  }, true);
+  const split = $("#split");
+  split.addEventListener("pointerdown", (e) => {
+    split.setPointerCapture(e.pointerId); split.classList.add("drag");
+    const move = (ev) => { const width = Math.max(260, Math.min(640, ev.clientX)); document.documentElement.style.setProperty("--side", width + "px"); };
+    const up = () => { split.classList.remove("drag"); split.removeEventListener("pointermove", move); split.removeEventListener("pointerup", up);
+      try { localStorage.setItem("attrdump.side", getComputedStyle(document.documentElement).getPropertyValue("--side")); } catch (error) { /* no storage */ } };
+    split.addEventListener("pointermove", move); split.addEventListener("pointerup", up);
+  });
+  try { const saved = localStorage.getItem("attrdump.side"); if (saved) { document.documentElement.style.setProperty("--side", saved); } } catch (error) { /* no storage */ }
+}
+
+function visibleNodes() {
+  const out = [];
+  const walk = (node) => { out.push(node); if (node.open) { node.children.forEach(walk); } };
+  if (S.rootNode) { walk(S.rootNode); }
+  return out;
+}
+
+function treeKey(e) {
+  if (S.tab !== "explorer" || !S.selected || document.activeElement.matches("input, select, textarea")) { return; }
+  e.preventDefault();
+  const list = visibleNodes();
+  const at = list.indexOf(S.selected);
+  const node = S.selected;
+  if (e.key === "ArrowDown" && list[at + 1]) { select(list[at + 1]); list[at + 1].row.scrollIntoView({ block: "nearest" }); }
+  if (e.key === "ArrowUp" && at > 0) { select(list[at - 1]); list[at - 1].row.scrollIntoView({ block: "nearest" }); }
+  if (e.key === "ArrowRight") { if (node.hasKids && !node.open) { toggle(node, true); } else if (node.open && list[at + 1]) { select(list[at + 1]); } }
+  if (e.key === "ArrowLeft") { if (node.open) { toggle(node, false); } else if (node.parent) { select(node.parent); } }
+}
+
+async function boot() {
+  wire();
+  setConnectionUI();
+  renderContent();
+  await pollStatus();
+  setInterval(pollStatus, 1000);
+  setInterval(() => { if (S.live && S.status && S.status.connected && S.selected) { refreshInspector(false); } }, 500);
+}
+let booted = false;
+const start = () => { if (!booted) { booted = true; boot(); } };
+window.addEventListener("pywebviewready", start);
+if (window.pywebview && window.pywebview.api) { start(); }
+</script>
+</body>
+</html>

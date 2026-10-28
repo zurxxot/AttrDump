@@ -1,0 +1,10 @@
+__pycache__/
+build/
+dist/
+*.spec
+*.exe
+
+# written next to the program at run time
+attributes.json
+layout_cache.json
+offsets_cache.json
