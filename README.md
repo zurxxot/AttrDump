@@ -6,7 +6,11 @@ to update after a Roblox update), and shows everything in a dark desktop window.
 
 Windows only. Python 3.10+ and the WebView2 runtime (already on Windows 11).
 
-## Run it
+## Download
+
+A ready-built `attrdump.exe` (no Python needed) is on the [Releases page](../../releases/latest). It is not code-signed, so Windows SmartScreen may warn on first run.
+
+## Run it from source
 
 ```
 pip install -r requirements.txt
